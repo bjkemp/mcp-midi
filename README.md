@@ -58,6 +58,12 @@ The server provides an introduction prompt:
      - `channel` (integer, optional): MIDI channel (0-15, default: 0)
    - Returns: Confirmation of controller change
 
+- `all_notes_off`
+   - Send All Notes Off messages to stop any stuck notes
+   - Input:
+     - `channels` (array of integers, optional): MIDI channels to send All Notes Off messages (default: all channels)
+   - Returns: Confirmation of All Notes Off sent
+
 #### Song Creation and Playback Tools
 - `create_song`
    - Create a new empty song
@@ -160,6 +166,21 @@ play_song name="Chord Progression"
 
 # Stop the currently playing song
 stop_song
+
+# Clear any stuck notes
+all_notes_off
+```
+
+### Handling Stuck Notes
+```
+# Clear all notes on all channels
+all_notes_off
+
+# Clear notes only on the drum channel
+all_notes_off channels=[9]
+
+# Clear notes on multiple specific channels
+all_notes_off channels=[0,1,2]
 ```
 
 ## Usage with Claude Desktop
