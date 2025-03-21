@@ -1,4 +1,5 @@
 from . import server
+from .song import song, manager
 import asyncio
 
 
@@ -8,4 +9,4 @@ def main():
 
 
 # Expose important items at package level
-__all__ = ["main", "server"]
+__all__ = ["main", "server", "song"]

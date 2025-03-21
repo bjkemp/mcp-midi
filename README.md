@@ -13,7 +13,6 @@ The server provides an introduction prompt:
   - Guides users through interacting with MIDI devices
 
 ### Tools
-The server offers six core tools:
 
 #### Device Tools
 - `discover_ports`
@@ -58,6 +57,110 @@ The server offers six core tools:
      - `value` (integer): Control value (0-127)
      - `channel` (integer, optional): MIDI channel (0-15, default: 0)
    - Returns: Confirmation of controller change
+
+#### Song Creation and Playback Tools
+- `create_song`
+   - Create a new empty song
+   - Input:
+     - `name` (string): Name of the song
+     - `tempo` (integer, optional): Tempo in BPM (beats per minute, default: 120)
+   - Returns: Confirmation of song creation
+
+- `create_scale`
+   - Create a new song with a musical scale
+   - Input:
+     - `name` (string): Name of the song
+     - `root_note` (integer): Root note of the scale (0-127)
+     - `scale_type` (string): Type of scale (major, minor, pentatonic, blues, chromatic)
+     - `octaves` (integer, optional): Number of octaves (default: 1)
+     - `duration` (number, optional): Duration of each note in seconds (default: 0.5)
+   - Returns: Confirmation of scale song creation
+
+- `add_note`
+   - Add a note to the current song
+   - Input:
+     - `pitch` (integer): MIDI note number (0-127)
+     - `time` (number): Time in seconds when the note should start
+     - `duration` (number): Duration of the note in seconds
+     - `velocity` (integer, optional): Velocity (0-127, default: 64)
+     - `channel` (integer, optional): MIDI channel (0-15, default: 0)
+   - Returns: Confirmation of note addition
+
+- `add_chord`
+   - Add a chord to the current song
+   - Input:
+     - `notes` (array of integers): List of MIDI note numbers
+     - `time` (number): Time in seconds when the chord should start
+     - `duration` (number): Duration of the chord in seconds
+     - `velocity` (integer, optional): Velocity (0-127, default: 64)
+     - `channel` (integer, optional): MIDI channel (0-15, default: 0)
+   - Returns: Confirmation of chord addition
+
+- `add_program_change`
+   - Add a program change to the current song
+   - Input:
+     - `program` (integer): Program/instrument number (0-127)
+     - `time` (number): Time in seconds when the program change should occur
+     - `channel` (integer, optional): MIDI channel (0-15, default: 0)
+   - Returns: Confirmation of program change addition
+
+- `play_song`
+   - Play a song by name
+   - Input:
+     - `name` (string): Name of the song to play
+   - Returns: Confirmation of song playback
+
+- `stop_song`
+   - Stop the currently playing song
+   - No input required
+   - Returns: Confirmation of song stopped
+
+- `list_songs`
+   - List all available songs
+   - No input required
+   - Returns: List of available songs with their durations and tempos
+
+## Example Usage
+
+### Simple Note Playing
+```
+# Discover MIDI ports
+discover_ports
+
+# Connect to a port (usually port 0)
+connect_port port_id=0
+
+# Change to piano instrument
+program_change program=0
+
+# Play a middle C note
+note_on note=60 velocity=80
+
+# Stop the note after a while
+note_off note=60
+```
+
+### Song Creation and Playback
+```
+# Create a C major scale
+create_scale name="C Major Scale" root_note=60 scale_type="major" octaves=1 duration=0.3
+
+# Create a chord progression
+create_song name="Chord Progression" tempo=100
+
+# Add some chords (C, Am, F, G)
+add_chord notes=[60, 64, 67] time=0.0 duration=1.0
+add_chord notes=[57, 60, 64] time=1.0 duration=1.0
+add_chord notes=[53, 57, 60, 65] time=2.0 duration=1.0
+add_chord notes=[55, 59, 62, 67] time=3.0 duration=1.0
+
+# Play the songs
+play_song name="C Major Scale"
+play_song name="Chord Progression"
+
+# Stop the currently playing song
+stop_song
+```
 
 ## Usage with Claude Desktop
 

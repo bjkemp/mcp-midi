@@ -8,6 +8,9 @@ import rtmidi
 from typing import Dict, List, Optional, Any, Union
 from pydantic import AnyUrl
 
+from mcp_midi.song.song import Song
+from mcp_midi.song.manager import SongManager
+
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
@@ -38,6 +41,16 @@ You now have access to a MIDI synthesizer through the MCP MIDI server. You can u
 - note_off: Stop a note (parameters: note, channel)
 - program_change: Change the instrument sound (parameters: program, channel)
 - control_change: Change a controller value (parameters: control, value, channel)
+
+Song Creation and Management:
+- create_song: Create a new empty song with a name and tempo
+- create_scale: Create a new song with a musical scale (major, minor, pentatonic, blues, chromatic)
+- add_note: Add a note to the current song
+- add_chord: Add a chord to the current song
+- add_program_change: Add a program change to the current song
+- play_song: Play a song by name
+- stop_song: Stop the currently playing song
+- list_songs: List all available songs
 </tools>
 
 Here are some common MIDI notes:
@@ -59,7 +72,7 @@ Common General MIDI instruments (program numbers):
 - Trumpet: 56
 - Synth Lead: 80
 
-You can play notes, chords, and melodies on the connected MIDI device. Feel free to ask me to play specific notes, chords, or change instruments.
+You can play individual notes or create and play more complex songs with multiple notes, chords, and instrument changes.
 """
 
 class MidiManager:
@@ -67,7 +80,11 @@ class MidiManager:
         self.ports = {}
         self.active_port = None
         self.current_port_id = None
+        self.song_manager = SongManager()
         self.discover_ports()
+        
+        # Set up the song manager with the MIDI sending callback
+        self.song_manager.set_midi_callback(self._handle_midi_message)
         
     def discover_ports(self) -> Dict[int, Dict]:
         """Discover available MIDI output ports"""
@@ -176,8 +193,43 @@ class MidiManager:
             logger.error(f"Error sending control_change: {e}")
             return False
     
+    def _handle_midi_message(self, message_type: str, params: Dict[str, Any]) -> bool:
+        """Callback for sending MIDI messages from the song system"""
+        try:
+            if message_type == "note_on":
+                return self.send_note_on(
+                    params.get("note", 60),
+                    params.get("velocity", 64),
+                    params.get("channel", 0)
+                )
+            elif message_type == "note_off":
+                return self.send_note_off(
+                    params.get("note", 60),
+                    params.get("channel", 0)
+                )
+            elif message_type == "program_change":
+                return self.send_program_change(
+                    params.get("program", 0),
+                    params.get("channel", 0)
+                )
+            elif message_type == "control_change":
+                return self.send_control_change(
+                    params.get("control", 0),
+                    params.get("value", 0),
+                    params.get("channel", 0)
+                )
+            else:
+                logger.warning(f"Unknown MIDI message type: {message_type}")
+                return False
+        except Exception as e:
+            logger.error(f"Error handling MIDI message: {e}")
+            return False
+    
     def close(self):
         """Close all connections"""
+        # Stop any playing songs
+        self.song_manager.stop_current_song()
+        
         if self.active_port is not None:
             self.active_port.close()
             self.active_port = None
@@ -306,6 +358,104 @@ async def main():
                     "required": ["control", "value"],
                 },
             ),
+            # Song-related tools
+            types.Tool(
+                name="create_song",
+                description="Create a new empty song",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Name of the song"},
+                        "tempo": {"type": "integer", "description": "Tempo in BPM (beats per minute)"},
+                    },
+                    "required": ["name"],
+                },
+            ),
+            types.Tool(
+                name="create_scale",
+                description="Create a new song with a musical scale",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Name of the song"},
+                        "root_note": {"type": "integer", "description": "Root note of the scale (0-127)"},
+                        "scale_type": {"type": "string", "description": "Type of scale (major, minor, pentatonic, blues, chromatic)"},
+                        "octaves": {"type": "integer", "description": "Number of octaves"},
+                        "duration": {"type": "number", "description": "Duration of each note in seconds"},
+                    },
+                    "required": ["name", "root_note", "scale_type"],
+                },
+            ),
+            types.Tool(
+                name="add_note",
+                description="Add a note to the current song",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "pitch": {"type": "integer", "description": "MIDI note number (0-127)"},
+                        "time": {"type": "number", "description": "Time in seconds when the note should start"},
+                        "duration": {"type": "number", "description": "Duration of the note in seconds"},
+                        "velocity": {"type": "integer", "description": "Velocity (0-127)"},
+                        "channel": {"type": "integer", "description": "MIDI channel (0-15)"},
+                    },
+                    "required": ["pitch", "time", "duration"],
+                },
+            ),
+            types.Tool(
+                name="add_chord",
+                description="Add a chord to the current song",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "notes": {"type": "array", "items": {"type": "integer"}, "description": "List of MIDI note numbers"},
+                        "time": {"type": "number", "description": "Time in seconds when the chord should start"},
+                        "duration": {"type": "number", "description": "Duration of the chord in seconds"},
+                        "velocity": {"type": "integer", "description": "Velocity (0-127)"},
+                        "channel": {"type": "integer", "description": "MIDI channel (0-15)"},
+                    },
+                    "required": ["notes", "time", "duration"],
+                },
+            ),
+            types.Tool(
+                name="add_program_change",
+                description="Add a program change to the current song",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "program": {"type": "integer", "description": "Program/instrument number (0-127)"},
+                        "time": {"type": "number", "description": "Time in seconds when the program change should occur"},
+                        "channel": {"type": "integer", "description": "MIDI channel (0-15)"},
+                    },
+                    "required": ["program", "time"],
+                },
+            ),
+            types.Tool(
+                name="play_song",
+                description="Play a song by name",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Name of the song to play"},
+                    },
+                    "required": ["name"],
+                },
+            ),
+            types.Tool(
+                name="stop_song",
+                description="Stop the currently playing song",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                },
+            ),
+            types.Tool(
+                name="list_songs",
+                description="List all available songs",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                },
+            ),
         ]
     
     @server.call_tool()
@@ -315,6 +465,7 @@ async def main():
         """Handle tool execution requests"""
         logger.debug(f"Handling call_tool request for {name} with args {arguments}")
         try:
+            # Standard MIDI tools
             if name == "discover_ports":
                 ports = midi_manager.discover_ports()
                 return [types.TextContent(type="text", text=str(ports))]
@@ -377,6 +528,122 @@ async def main():
                     return [types.TextContent(type="text", text=f"Changed controller {arguments['control']} to value {arguments['value']} on channel {channel}")]
                 else:
                     return [types.TextContent(type="text", text=f"Failed to change controller {arguments['control']}")]
+            
+            # Song-related tools
+            elif name == "create_song":
+                if not arguments or "name" not in arguments:
+                    raise ValueError("Missing name argument")
+                
+                tempo = arguments.get("tempo", 120)
+                song = Song(name=arguments["name"], tempo=tempo)
+                midi_manager.song_manager.add_song(song)
+                midi_manager.song_manager.set_current_song(arguments["name"])
+                
+                return [types.TextContent(type="text", text=f"Created new song '{arguments['name']}' with tempo {tempo} BPM")]
+            
+            elif name == "create_scale":
+                if not arguments or "name" not in arguments or "root_note" not in arguments or "scale_type" not in arguments:
+                    raise ValueError("Missing required arguments")
+                
+                octaves = arguments.get("octaves", 1)
+                duration = arguments.get("duration", 0.5)
+                
+                song = midi_manager.song_manager.create_scale_song(
+                    name=arguments["name"],
+                    root_note=arguments["root_note"],
+                    scale_type=arguments["scale_type"],
+                    octaves=octaves,
+                    duration=duration
+                )
+                
+                midi_manager.song_manager.set_current_song(arguments["name"])
+                
+                return [types.TextContent(type="text", text=f"Created scale song '{arguments['name']}' with root note {arguments['root_note']} ({arguments['scale_type']} scale), {octaves} octaves, and note duration {duration}s")]
+            
+            elif name == "add_note":
+                if not arguments or "pitch" not in arguments or "time" not in arguments or "duration" not in arguments:
+                    raise ValueError("Missing required arguments")
+                
+                if not midi_manager.song_manager.current_song:
+                    return [types.TextContent(type="text", text="No current song selected. Please create a song first.")]
+                
+                velocity = arguments.get("velocity", 64)
+                channel = arguments.get("channel", 0)
+                
+                midi_manager.song_manager.current_song.add_note(
+                    pitch=arguments["pitch"],
+                    time=arguments["time"],
+                    duration=arguments["duration"],
+                    velocity=velocity,
+                    channel=channel
+                )
+                
+                return [types.TextContent(type="text", text=f"Added note {arguments['pitch']} at time {arguments['time']}s with duration {arguments['duration']}s to song '{midi_manager.song_manager.current_song.name}'")]
+            
+            elif name == "add_chord":
+                if not arguments or "notes" not in arguments or "time" not in arguments or "duration" not in arguments:
+                    raise ValueError("Missing required arguments")
+                
+                if not midi_manager.song_manager.current_song:
+                    return [types.TextContent(type="text", text="No current song selected. Please create a song first.")]
+                
+                velocity = arguments.get("velocity", 64)
+                channel = arguments.get("channel", 0)
+                
+                midi_manager.song_manager.current_song.add_chord(
+                    notes=arguments["notes"],
+                    time=arguments["time"],
+                    duration=arguments["duration"],
+                    velocity=velocity,
+                    channel=channel
+                )
+                
+                return [types.TextContent(type="text", text=f"Added chord {arguments['notes']} at time {arguments['time']}s with duration {arguments['duration']}s to song '{midi_manager.song_manager.current_song.name}'")]
+            
+            elif name == "add_program_change":
+                if not arguments or "program" not in arguments or "time" not in arguments:
+                    raise ValueError("Missing required arguments")
+                
+                if not midi_manager.song_manager.current_song:
+                    return [types.TextContent(type="text", text="No current song selected. Please create a song first.")]
+                
+                channel = arguments.get("channel", 0)
+                
+                midi_manager.song_manager.current_song.add_program_change(
+                    program=arguments["program"],
+                    time=arguments["time"],
+                    channel=channel
+                )
+                
+                return [types.TextContent(type="text", text=f"Added program change to {arguments['program']} at time {arguments['time']}s to song '{midi_manager.song_manager.current_song.name}'")]
+            
+            elif name == "play_song":
+                if not arguments or "name" not in arguments:
+                    raise ValueError("Missing name argument")
+                
+                success = midi_manager.song_manager.play_song(arguments["name"])
+                if success:
+                    return [types.TextContent(type="text", text=f"Playing song '{arguments['name']}'")]
+                else:
+                    return [types.TextContent(type="text", text=f"Failed to play song '{arguments['name']}'. Make sure it exists.")]
+            
+            elif name == "stop_song":
+                success = midi_manager.song_manager.stop_current_song()
+                if success:
+                    return [types.TextContent(type="text", text="Stopped the current song")]
+                else:
+                    return [types.TextContent(type="text", text="No song is currently playing")]
+            
+            elif name == "list_songs":
+                songs = midi_manager.song_manager.get_all_songs()
+                if not songs:
+                    return [types.TextContent(type="text", text="No songs available. Use create_song to create a new song.")]
+                
+                song_list = []
+                for name, song in songs.items():
+                    song_list.append(f"- {name} (duration: {song.duration:.2f}s, tempo: {song.tempo} BPM)")
+                
+                return [types.TextContent(type="text", text="Available songs:\n" + "\n".join(song_list))]
             
             else:
                 raise ValueError(f"Unknown tool: {name}")
