@@ -1,5 +1,6 @@
 from . import server
 from .song import song, manager
+from . import all_notes_off
 import asyncio
 
 
@@ -9,4 +10,4 @@ def main():
 
 
 # Expose important items at package level
-__all__ = ["main", "server", "song"]
+__all__ = ["main", "server", "song", "all_notes_off"]

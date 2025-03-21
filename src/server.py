@@ -17,6 +17,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import uvicorn
 
+from mcp_midi.all_notes_off import register_note_on, register_note_off, all_notes_off
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -189,6 +191,10 @@ async def send_note_on(note_data: MidiNoteOn, port_id: int = 0):
             channel=note_data.channel
         )
         port.send(msg)
+        
+        # Register the note as active
+        register_note_on(note_data.note, note_data.channel)
+        
         return {"message": f"Sent note_on: {note_data}"}
     except Exception as e:
         return JSONResponse(
@@ -209,6 +215,10 @@ async def send_note_off(note_data: MidiNoteOff, port_id: int = 0):
             channel=note_data.channel
         )
         port.send(msg)
+        
+        # Unregister the note
+        register_note_off(note_data.note, note_data.channel)
+        
         return {"message": f"Sent note_off: {note_data}"}
     except Exception as e:
         return JSONResponse(
@@ -249,6 +259,32 @@ async def send_program_change(pc_data: MidiProgramChange, port_id: int = 0):
         )
         port.send(msg)
         return {"message": f"Sent program_change: {pc_data}"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+class AllNotesOffRequest(BaseModel):
+    """Model for all_notes_off request"""
+    channels: Optional[List[int]] = None  # None = all channels
+
+
+@app.post("/midi/all_notes_off")
+async def send_all_notes_off(request: AllNotesOffRequest = None, port_id: int = 0):
+    """Send all_notes_off messages for the specified channels"""
+    try:
+        port = connect_to_port(port_id)
+        
+        # Use default if no request body was provided
+        if request is None:
+            request = AllNotesOffRequest()
+        
+        # Send all notes off
+        all_notes_off(port, None, request.channels)
+        
+        return {"message": f"Sent all_notes_off for channels: {request.channels or 'all'}"}
     except Exception as e:
         return JSONResponse(
             status_code=400,
@@ -353,6 +389,18 @@ async def mcp_endpoint(request: Request):
             return MCPResponse(
                 id=mcp_request.id,
                 result={"message": f"Control change: {control}, value: {value}"}
+            )
+            
+        elif mcp_request.method == "midi.all_notes_off":
+            port_id = mcp_request.params.get("port_id", 0)
+            channels = mcp_request.params.get("channels")
+            
+            port = connect_to_port(port_id)
+            all_notes_off(port, None, channels)
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"message": f"All notes off sent for channels: {channels or 'all'}"}
             )
         
         else:

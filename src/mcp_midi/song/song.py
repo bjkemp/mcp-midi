@@ -12,6 +12,8 @@ from typing import Dict, List, Optional, Any, Union, Callable
 
 import mido
 
+from ..all_notes_off import register_note_on, register_note_off, all_notes_off
+
 logger = logging.getLogger("mcp_midi.song")
 
 class NoteType(Enum):
@@ -324,6 +326,9 @@ class Song:
                     "channel": note.channel
                 })
                 
+                # Register the note as active using our tracking utility
+                register_note_on(note.pitch, note.channel)
+                
                 # Schedule note_off after duration
                 # Store the note in active_notes to turn it off if playback is stopped
                 active_notes[(note.pitch, note.channel)] = event.time + note.duration
@@ -403,6 +408,9 @@ class Song:
                 "note": pitch,
                 "channel": channel
             })
+            
+            # Unregister the note using our tracking utility
+            register_note_off(pitch, channel)
     
     def start_playback(self) -> None:
         """Start song playback"""
@@ -426,3 +434,10 @@ class Song:
         # Signal the playback to stop
         self._stop_event.set()
         logger.info(f"Stopping song playback: {self.name}")
+        
+        # Make sure all notes are turned off
+        if self.send_midi_callback:
+            # Send all notes off messages
+            for channel in range(16):  # All MIDI channels
+                # Use our all_notes_off utility with callback
+                all_notes_off(None, self.send_midi_callback, [channel])
