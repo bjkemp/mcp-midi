@@ -137,6 +137,35 @@ When Claude generates a MIDI file, it should:
 
 This allows for completely dynamic MIDI generation without requiring access to the filesystem.
 
+#### Claude's MIDI Workflow
+
+As an AI assistant, Claude can:
+
+1. **Generate MIDI data** directly in response to user requests
+2. **Base64-encode** this data for transmission
+3. **Send** the encoded data to the MCP-MIDI server
+4. **Play** the musical content through connected MIDI devices
+
+Example interaction:
+
+```
+Human: Can you create a happy tune for my birthday?
+
+Claude: I'd love to create a birthday tune for you! Let me compose something cheerful.
+
+[Claude internally generates appropriate MIDI data]
+
+I've composed a happy birthday tune! Let me send it to your MIDI device:
+
+load_content data="TVRoZAAAAAYAAQACAeBNVHJrAAAAPQDAOACQQ2SBcIBDQACQQ2SBcIBDQA..." name="Happy Birthday"
+
+play_file name="Happy Birthday"
+
+How does that sound? Would you like me to adjust anything about the melody or instrumentation?
+```
+
+This workflow enables completely dynamic music generation directly from conversation, without needing to save files to disk first.
+
 ### Converting MIDI Files to Songs
 You can convert a MIDI file to a Song object for more control:
 1. Load the file: `load_file path="/path/to/song.mid"`
