@@ -126,6 +126,37 @@ The server provides an introduction prompt:
    - No input required
    - Returns: List of available songs with their durations and tempos
 
+#### MIDI File Tools
+- `load_file`
+   - Load a MIDI file from path
+   - Input:
+     - `path` (string): Path to the MIDI file
+     - `name` (string, optional): Name to identify the MIDI file (defaults to filename)
+   - Returns: Information about the loaded MIDI file
+
+- `list_files`
+   - List all loaded MIDI files
+   - No input required
+   - Returns: List of loaded MIDI files with their properties
+
+- `play_file`
+   - Play a loaded MIDI file
+   - Input:
+     - `name` (string): Name of the MIDI file to play
+     - `port_id` (integer, optional): MIDI port to use (default: 0)
+   - Returns: Confirmation of playback start
+
+- `stop_file`
+   - Stop the currently playing MIDI file
+   - No input required
+   - Returns: Confirmation of playback stop
+
+- `convert_to_song`
+   - Convert a MIDI file to a Song object for more control
+   - Input:
+     - `name` (string): Name of the MIDI file to convert
+   - Returns: Information about the created song
+
 ## Example Usage
 
 ### Simple Note Playing
@@ -181,6 +212,27 @@ all_notes_off channels=[9]
 
 # Clear notes on multiple specific channels
 all_notes_off channels=[0,1,2]
+```
+
+### MIDI File Playback
+```
+# Load a MIDI file
+load_file path="/path/to/song.mid" name="My Song"
+
+# List all loaded MIDI files
+list_files
+
+# Play a loaded MIDI file
+play_file name="My Song"
+
+# Stop playback
+stop_file
+
+# Convert a MIDI file to a Song object
+convert_to_song name="My Song"
+
+# Play the converted song
+play_song name="My Song"
 ```
 
 ## Usage with Claude Desktop

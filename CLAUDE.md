@@ -58,6 +58,31 @@ all_notes_off channels=[0]  # Clear specific channel
 - Always include program_change messages at the beginning
 - Include all_notes_off calls when stopping playback
 
+## Working with MIDI Files
+
+### MIDI File Formats
+- Standard MIDI files (.mid or .midi) are supported
+- Type 0 (single track) and Type 1 (multi-track) files are supported
+- Files contain notes, program changes, controller messages, and more
+
+### Loading and Playing MIDI Files
+1. Load a file: `load_file path="/path/to/song.mid" name="My Song"`
+2. Verify loading: `list_files`
+3. Play the file: `play_file name="My Song"`
+4. Stop playback: `stop_file`
+
+### Converting MIDI Files to Songs
+You can convert a MIDI file to a Song object for more control:
+1. Load the file: `load_file path="/path/to/song.mid"`
+2. Convert to song: `convert_to_song name="My Song"`
+3. The song is now available: `play_song name="My Song"`
+
+This allows you to:
+- Modify the song structure
+- Add or remove notes
+- Change tempo or instruments
+- Save the song for later use
+
 ## Workflow Patterns
 
 ### Simple Demo Workflow
