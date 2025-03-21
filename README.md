@@ -134,6 +134,13 @@ The server provides an introduction prompt:
      - `name` (string, optional): Name to identify the MIDI file (defaults to filename)
    - Returns: Information about the loaded MIDI file
 
+- `load_content`
+   - Load a MIDI file from base64-encoded binary data
+   - Input:
+     - `data` (string): Base64-encoded MIDI file content
+     - `name` (string, optional): Name to identify the MIDI file (defaults to "uploaded_midi")
+   - Returns: Information about the loaded MIDI file
+
 - `list_files`
    - List all loaded MIDI files
    - No input required
@@ -216,8 +223,11 @@ all_notes_off channels=[0,1,2]
 
 ### MIDI File Playback
 ```
-# Load a MIDI file
+# Load a MIDI file from path
 load_file path="/path/to/song.mid" name="My Song"
+
+# Load a MIDI file from base64-encoded binary data
+load_content data="TVRoZAAAAAYAAQABAPBNVHJrAAAAFAD/UQMHoSAA/y8ATVRoZAAAAAYAAQABA9A=" name="Generated Song"
 
 # List all loaded MIDI files
 list_files

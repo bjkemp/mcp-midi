@@ -65,6 +65,51 @@ class MidiFilePlayer:
             logger.error(f"Error loading MIDI file from {path}: {e}")
             return False
     
+    def load_from_bytes(self, data: bytes, name: str = "uploaded_midi") -> bool:
+        """Load a MIDI file from binary data"""
+        try:
+            import io
+            
+            # Create a file-like object from the binary data
+            file_obj = io.BytesIO(data)
+            
+            # Load the MIDI file
+            midi_file = mido.MidiFile(file=file_obj)
+            
+            self.midi_files[name] = {
+                'path': "memory",
+                'midi': midi_file,
+                'ticks_per_beat': midi_file.ticks_per_beat,
+                'type': midi_file.type,
+                'tracks': len(midi_file.tracks),
+                'length': midi_file.length  # Length in seconds
+            }
+            
+            logger.info(f"Loaded MIDI file '{name}' from binary data")
+            logger.info(f"File details: Type {midi_file.type}, {len(midi_file.tracks)} tracks, " 
+                       f"{midi_file.length:.2f} seconds")
+            
+            return True
+        
+        except Exception as e:
+            logger.error(f"Error loading MIDI file from binary data: {e}")
+            return False
+    
+    def load_from_base64(self, base64_data: str, name: str = "uploaded_midi") -> bool:
+        """Load a MIDI file from base64-encoded data"""
+        try:
+            import base64
+            
+            # Decode the base64 data
+            binary_data = base64.b64decode(base64_data)
+            
+            # Use the binary data loading function
+            return self.load_from_bytes(binary_data, name)
+        
+        except Exception as e:
+            logger.error(f"Error loading MIDI file from base64 data: {e}")
+            return False
+    
     def get_file_info(self, name: str) -> Optional[Dict]:
         """Get information about a loaded MIDI file"""
         return self.midi_files.get(name)

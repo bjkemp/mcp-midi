@@ -301,6 +301,12 @@ class LoadMidiRequest(BaseModel):
     name: Optional[str] = None
 
 
+class LoadMidiContentRequest(BaseModel):
+    """Model for loading MIDI content from base64-encoded data"""
+    data: str  # Base64-encoded MIDI file data
+    name: str = "uploaded_midi"
+
+
 @app.post("/midi/load_file")
 async def load_midi_file(request: LoadMidiRequest):
     """Load a MIDI file"""
@@ -321,6 +327,32 @@ async def load_midi_file(request: LoadMidiRequest):
             return JSONResponse(
                 status_code=400,
                 content={"error": f"Failed to load MIDI file from {request.path}"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/midi/load_content")
+async def load_midi_content(request: LoadMidiContentRequest):
+    """Load a MIDI file from base64-encoded data"""
+    try:
+        # Configure the MIDI file player
+        midi_file_player.set_midi_callback(lambda cmd_type, params: 
+            asyncio.create_task(_send_midi_message(cmd_type, params)))
+        
+        success = midi_file_player.load_from_base64(request.data, request.name)
+        
+        if success:
+            # Get the file info
+            file_info = midi_file_player.get_file_info(request.name)
+            return {"message": "MIDI content loaded successfully", "info": file_info}
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Failed to load MIDI content from base64 data"},
             )
     except Exception as e:
         return JSONResponse(
@@ -583,6 +615,32 @@ async def mcp_endpoint(request: Request):
                     error={
                         "code": -32000,
                         "message": f"Failed to load MIDI file from {path}"
+                    }
+                )
+        
+        elif mcp_request.method == "midi.load_content":
+            data = mcp_request.params.get("data")  # Base64-encoded MIDI data
+            name = mcp_request.params.get("name", "uploaded_midi")
+            
+            # Configure the MIDI file player
+            midi_file_player.set_midi_callback(lambda cmd_type, params: 
+                asyncio.create_task(_send_midi_message(cmd_type, params)))
+            
+            success = midi_file_player.load_from_base64(data, name)
+            
+            if success:
+                # Get the file info
+                file_info = midi_file_player.get_file_info(name)
+                return MCPResponse(
+                    id=mcp_request.id,
+                    result={"message": "MIDI content loaded successfully", "info": file_info}
+                )
+            else:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32000,
+                        "message": "Failed to load MIDI content from base64 data"
                     }
                 )
             

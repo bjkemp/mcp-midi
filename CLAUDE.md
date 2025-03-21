@@ -66,10 +66,76 @@ all_notes_off channels=[0]  # Clear specific channel
 - Files contain notes, program changes, controller messages, and more
 
 ### Loading and Playing MIDI Files
-1. Load a file: `load_file path="/path/to/song.mid" name="My Song"`
-2. Verify loading: `list_files`
-3. Play the file: `play_file name="My Song"`
-4. Stop playback: `stop_file`
+1. Load a file from path: `load_file path="/path/to/song.mid" name="My Song"`
+2. OR load from base64-encoded binary data: `load_content data="TVRoZAAAAAYAAQABA..." name="My Song"`
+3. Verify loading: `list_files`
+4. Play the file: `play_file name="My Song"`
+5. Stop playback: `stop_file`
+
+### Generating MIDI Content with Claude
+As Claude, you can generate MIDI content directly by:
+1. Creating the binary structure of a MIDI file
+2. Base64-encoding the binary data
+3. Sending it to mcp-midi via the `load_content` function
+
+This allows for dynamic MIDI generation without needing to save to the filesystem first.
+
+#### MIDI File Structure
+MIDI files consist of a header chunk and one or more track chunks:
+- Header: `MThd` + length (4 bytes) + format (2 bytes) + tracks (2 bytes) + division (2 bytes)
+- Track: `MTrk` + length (4 bytes) + events...
+
+For simple MIDI generation, you can create a basic template and modify it as needed.
+
+#### Example: Generating a Simple MIDI Melody
+Here's an example of generating a simple MIDI file with Python code and then base64-encoding it:
+
+```python
+import mido
+import base64
+import io
+
+# Create a new MIDI file with one track
+mid = mido.MidiFile()
+track = mido.MidiTrack()
+mid.tracks.append(track)
+
+# Add program change (instrument selection)
+track.append(mido.Message('program_change', program=0, time=0))  # Piano
+
+# Add some notes
+track.append(mido.Message('note_on', note=60, velocity=100, time=0))   # C4
+track.append(mido.Message('note_off', note=60, velocity=64, time=480)) # After 1 beat
+
+track.append(mido.Message('note_on', note=62, velocity=100, time=0))   # D4
+track.append(mido.Message('note_off', note=62, velocity=64, time=480)) # After 1 beat
+
+track.append(mido.Message('note_on', note=64, velocity=100, time=0))   # E4
+track.append(mido.Message('note_off', note=64, velocity=64, time=480)) # After 1 beat
+
+# End of track
+track.append(mido.MetaMessage('end_of_track', time=0))
+
+# Convert to bytes
+buffer = io.BytesIO()
+mid.save(file=buffer)
+midi_data = buffer.getvalue()
+
+# Convert to base64
+base64_data = base64.b64encode(midi_data).decode('utf-8')
+
+print(base64_data)
+```
+
+This generates a base64-encoded string that you can send directly to the `load_content` function.
+
+When Claude generates a MIDI file, it should:
+1. Understand the MIDI file format structure
+2. Generate the appropriate binary data
+3. Base64-encode it for transmission
+4. Send it to the `load_content` endpoint
+
+This allows for completely dynamic MIDI generation without requiring access to the filesystem.
 
 ### Converting MIDI Files to Songs
 You can convert a MIDI file to a Song object for more control:
