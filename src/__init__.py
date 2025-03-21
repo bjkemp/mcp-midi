@@ -1,0 +1,3 @@
+"""
+MCP MIDI Bridge package
+"""
