@@ -29,10 +29,43 @@ logger = logging.getLogger("mcp_midi")
 # Create FastAPI app
 app = FastAPI(title="MCP MIDI Server")
 
+# Helper function to create a MIDI callback
+def create_midi_callback():
+    """Create a callback function for sending MIDI messages
+    This is a workaround for the async issue in the Song class
+    """
+    def send_midi_callback(cmd_type, params, port_id=0):
+        try:
+            port = connect_to_port(port_id)
+            
+            if cmd_type == "note_on":
+                msg = mido.Message('note_on', note=params["note"], velocity=params["velocity"], channel=params["channel"])
+            elif cmd_type == "note_off":
+                msg = mido.Message('note_off', note=params["note"], velocity=params.get("velocity", 0), channel=params["channel"])
+            elif cmd_type == "control_change":
+                msg = mido.Message('control_change', control=params["control"], value=params["value"], channel=params["channel"])
+            elif cmd_type == "program_change":
+                msg = mido.Message('program_change', program=params["program"], channel=params["channel"])
+            else:
+                return
+            
+            port.send(msg)
+        except Exception as e:
+            logger.error(f"Error in MIDI callback: {e}")
+    
+    return send_midi_callback
+
 # Global state for MIDI connections
 midi_ports = {}
 active_ports = {}
 current_instrument = 0  # Default General MIDI instrument
+
+# Import song functionality
+from mcp_midi.song.manager import SongManager
+from mcp_midi.song.song import Song
+
+# Initialize song manager
+song_manager = SongManager()
 
 class MidiCommand(BaseModel):
     """Model for MIDI commands from Claude"""
@@ -113,13 +146,19 @@ def close_all_connections():
 async def startup_event():
     """Initialize the server on startup"""
     try:
+        # Discover MIDI ports
         ports = discover_midi_ports()
         if ports:
             logger.info(f"Discovered MIDI ports: {ports}")
         else:
             logger.warning("No MIDI ports were discovered. Please connect a MIDI device and restart the server.")
+        
+        # Initialize song manager with MIDI callback
+        midi_callback = create_midi_callback()
+        song_manager.set_midi_callback(midi_callback)
+        logger.info("Song manager initialized with MIDI callback")
     except Exception as e:
-        logger.error(f"Error discovering MIDI ports: {e}")
+        logger.error(f"Error during startup: {e}")
         logger.warning("The server will continue running, but MIDI functionality may not work properly.")
 
 
@@ -291,6 +330,242 @@ async def send_all_notes_off(request: AllNotesOffRequest = None, port_id: int = 
             content={"error": str(e)},
         )
 
+# Song-related endpoints
+
+class CreateSongRequest(BaseModel):
+    """Model for creating a new song"""
+    name: str
+    tempo: int = 120
+
+
+class CreateScaleRequest(BaseModel):
+    """Model for creating a scale"""
+    name: str
+    root_note: int
+    scale_type: str
+    octaves: int = 1
+    duration: float = 0.5
+
+
+class AddNoteRequest(BaseModel):
+    """Model for adding a note to a song"""
+    pitch: int
+    time: float
+    duration: float
+    velocity: int = 64
+    channel: int = 0
+
+
+class AddChordRequest(BaseModel):
+    """Model for adding a chord to a song"""
+    notes: List[int]
+    time: float
+    duration: float
+    velocity: int = 64
+    channel: int = 0
+
+
+class AddProgramChangeRequest(BaseModel):
+    """Model for adding a program change to a song"""
+    program: int
+    time: float
+    channel: int = 0
+
+
+class PlaySongRequest(BaseModel):
+    """Model for playing a song by name"""
+    name: str
+
+
+@app.post("/song/create")
+async def create_song(request: CreateSongRequest):
+    """Create a new empty song"""
+    try:
+        song = Song(name=request.name, tempo=request.tempo)
+        
+        # Set MIDI callback for the song
+        midi_callback = create_midi_callback()
+        
+        song.set_midi_callback(send_midi_callback)
+        song_manager.add_song(song)
+        
+        return {"message": f"Created song: {request.name}"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/song/create_scale")
+async def create_scale(request: CreateScaleRequest):
+    """Create a new song with a musical scale"""
+    try:
+        # Set MIDI callback for the song manager if not already set
+        if not song_manager.send_midi_callback:
+            midi_callback = create_midi_callback()
+            song_manager.set_midi_callback(midi_callback)
+        
+        song = song_manager.create_scale_song(
+            name=request.name,
+            root_note=request.root_note,
+            scale_type=request.scale_type,
+            octaves=request.octaves,
+            duration=request.duration
+        )
+        
+        return {
+            "message": f"Created scale song: {request.name}",
+            "song": {
+                "name": song.name,
+                "duration": song.duration
+            }
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/song/add_note")
+async def add_note_to_song(request: AddNoteRequest, song_name: str):
+    """Add a note to a song"""
+    try:
+        song = song_manager.get_song(song_name)
+        if not song:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Song not found: {song_name}"}
+            )
+        
+        song.add_note(
+            pitch=request.pitch,
+            time=request.time,
+            duration=request.duration,
+            velocity=request.velocity,
+            channel=request.channel
+        )
+        
+        return {"message": f"Added note to song: {song_name}"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/song/add_chord")
+async def add_chord_to_song(request: AddChordRequest, song_name: str):
+    """Add a chord to a song"""
+    try:
+        song = song_manager.get_song(song_name)
+        if not song:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Song not found: {song_name}"}
+            )
+        
+        song.add_chord(
+            notes=request.notes,
+            time=request.time,
+            duration=request.duration,
+            velocity=request.velocity,
+            channel=request.channel
+        )
+        
+        return {"message": f"Added chord to song: {song_name}"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/song/add_program_change")
+async def add_program_change_to_song(request: AddProgramChangeRequest, song_name: str):
+    """Add a program change to a song"""
+    try:
+        song = song_manager.get_song(song_name)
+        if not song:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Song not found: {song_name}"}
+            )
+        
+        song.add_program_change(
+            program=request.program,
+            time=request.time,
+            channel=request.channel
+        )
+        
+        return {"message": f"Added program change to song: {song_name}"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/song/play")
+async def play_song(request: PlaySongRequest):
+    """Play a song by name"""
+    try:
+        success = song_manager.play_song(request.name)
+        if not success:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Song not found or could not be played: {request.name}"}
+            )
+        
+        return {"message": f"Playing song: {request.name}"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/song/stop")
+async def stop_song():
+    """Stop the currently playing song"""
+    try:
+        success = song_manager.stop_current_song()
+        if not success:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "No song is currently playing"}
+            )
+        
+        return {"message": "Stopped current song"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.get("/song/list")
+async def list_songs():
+    """List all available songs"""
+    try:
+        songs = song_manager.get_all_songs()
+        song_list = [
+            {
+                "name": name,
+                "duration": song.duration,
+                "tempo": song.tempo
+            }
+            for name, song in songs.items()
+        ]
+        
+        return {"songs": song_list}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
 
 # MCP Protocol implementation
 class MCPRequest(BaseModel):
@@ -401,6 +676,244 @@ async def mcp_endpoint(request: Request):
             return MCPResponse(
                 id=mcp_request.id,
                 result={"message": f"All notes off sent for channels: {channels or 'all'}"}
+            )
+        
+        # Song-related MCP methods
+        elif mcp_request.method == "create_song":
+            name = mcp_request.params.get("name", "Untitled")
+            tempo = mcp_request.params.get("tempo", 120)
+            
+            song = Song(name=name, tempo=tempo)
+            
+            # Set MIDI callback for the song
+            midi_callback = create_midi_callback()
+            song.set_midi_callback(midi_callback)
+            song_manager.add_song(song)
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"message": f"Created song: {name}"}
+            )
+        
+        elif mcp_request.method == "create_scale":
+            name = mcp_request.params.get("name", "Scale")
+            root_note = mcp_request.params.get("root_note", 60)  # Middle C
+            scale_type = mcp_request.params.get("scale_type", "major")
+            octaves = mcp_request.params.get("octaves", 1)
+            duration = mcp_request.params.get("duration", 0.5)
+            
+            # Set MIDI callback for the song manager if not already set
+            if not song_manager.send_midi_callback:
+                async def send_midi_callback(cmd_type, params, port_id=0):
+                    port = connect_to_port(port_id)
+                    
+                    if cmd_type == "note_on":
+                        msg = mido.Message('note_on', note=params["note"], velocity=params["velocity"], channel=params["channel"])
+                    elif cmd_type == "note_off":
+                        msg = mido.Message('note_off', note=params["note"], velocity=params.get("velocity", 0), channel=params["channel"])
+                    elif cmd_type == "control_change":
+                        msg = mido.Message('control_change', control=params["control"], value=params["value"], channel=params["channel"])
+                    elif cmd_type == "program_change":
+                        msg = mido.Message('program_change', program=params["program"], channel=params["channel"])
+                    else:
+                        return
+                    
+                    port.send(msg)
+                
+                song_manager.set_midi_callback(send_midi_callback)
+            
+            song = song_manager.create_scale_song(
+                name=name,
+                root_note=root_note,
+                scale_type=scale_type,
+                octaves=octaves,
+                duration=duration
+            )
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={
+                    "message": f"Created scale song: {name}",
+                    "song": {
+                        "name": song.name,
+                        "duration": song.duration
+                    }
+                }
+            )
+        
+        elif mcp_request.method == "add_note":
+            song_name = mcp_request.params.get("name")
+            pitch = mcp_request.params.get("pitch")
+            time = mcp_request.params.get("time")
+            duration = mcp_request.params.get("duration")
+            velocity = mcp_request.params.get("velocity", 64)
+            channel = mcp_request.params.get("channel", 0)
+            
+            if not song_name:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": "Required parameter 'name' missing"
+                    }
+                )
+            
+            song = song_manager.get_song(song_name)
+            if not song:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": f"Song not found: {song_name}"
+                    }
+                )
+            
+            song.add_note(
+                pitch=pitch,
+                time=time,
+                duration=duration,
+                velocity=velocity,
+                channel=channel
+            )
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"message": f"Added note to song: {song_name}"}
+            )
+        
+        elif mcp_request.method == "add_chord":
+            song_name = mcp_request.params.get("name")
+            notes = mcp_request.params.get("notes")
+            time = mcp_request.params.get("time")
+            duration = mcp_request.params.get("duration")
+            velocity = mcp_request.params.get("velocity", 64)
+            channel = mcp_request.params.get("channel", 0)
+            
+            if not song_name:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": "Required parameter 'name' missing"
+                    }
+                )
+            
+            song = song_manager.get_song(song_name)
+            if not song:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": f"Song not found: {song_name}"
+                    }
+                )
+            
+            song.add_chord(
+                notes=notes,
+                time=time,
+                duration=duration,
+                velocity=velocity,
+                channel=channel
+            )
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"message": f"Added chord to song: {song_name}"}
+            )
+        
+        elif mcp_request.method == "add_program_change":
+            song_name = mcp_request.params.get("name")
+            program = mcp_request.params.get("program")
+            time = mcp_request.params.get("time")
+            channel = mcp_request.params.get("channel", 0)
+            
+            if not song_name:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": "Required parameter 'name' missing"
+                    }
+                )
+            
+            song = song_manager.get_song(song_name)
+            if not song:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": f"Song not found: {song_name}"
+                    }
+                )
+            
+            song.add_program_change(
+                program=program,
+                time=time,
+                channel=channel
+            )
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"message": f"Added program change to song: {song_name}"}
+            )
+        
+        elif mcp_request.method == "play_song":
+            song_name = mcp_request.params.get("name")
+            
+            if not song_name:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": "Required parameter 'name' missing"
+                    }
+                )
+            
+            success = song_manager.play_song(song_name)
+            if not success:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": f"Song not found or could not be played: {song_name}"
+                    }
+                )
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"message": f"Playing song: {song_name}"}
+            )
+        
+        elif mcp_request.method == "stop_song":
+            success = song_manager.stop_current_song()
+            if not success:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32602,
+                        "message": "No song is currently playing"
+                    }
+                )
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"message": "Stopped current song"}
+            )
+        
+        elif mcp_request.method == "list_songs":
+            songs = song_manager.get_all_songs()
+            song_list = [
+                {
+                    "name": name,
+                    "duration": song.duration,
+                    "tempo": song.tempo
+                }
+                for name, song in songs.items()
+            ]
+            
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"songs": song_list}
             )
         
         else:
