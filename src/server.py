@@ -387,8 +387,7 @@ async def create_song(request: CreateSongRequest):
         
         # Set MIDI callback for the song
         midi_callback = create_midi_callback()
-        
-        song.set_midi_callback(send_midi_callback)
+        song.set_midi_callback(midi_callback)
         song_manager.add_song(song)
         
         return {"message": f"Created song: {request.name}"}
