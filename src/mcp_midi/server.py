@@ -10,6 +10,7 @@ from pydantic import AnyUrl
 
 from mcp_midi.song.song import Song
 from mcp_midi.song.manager import SongManager
+from mcp_midi.tracker_parser import create_midi_song
 
 from mcp.server.models import InitializationOptions
 import mcp.types as types
@@ -73,6 +74,12 @@ Common General MIDI instruments (program numbers):
 - Synth Lead: 80
 
 You can play individual notes or create and play more complex songs with multiple notes, chords, and instrument changes.
+
+You can also load and play tracker files, which are text-based music files that organize notes into a grid pattern. Tracker files provide a visual representation of music composition, separating different instrument tracks into columns and time positions into rows.
+
+Tracker tools:
+- load_tracker_content: Load a tracker file from a text string
+- play_song: Play the created song
 """
 
 class MidiManager:
@@ -456,6 +463,19 @@ async def main():
                     "properties": {},
                 },
             ),
+            # Tracker tools
+            types.Tool(
+                name="load_tracker_content",
+                description="Load a tracker file from a text string",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "Tracker file content as text"},
+                        "name": {"type": "string", "description": "Name for the tracker song"},
+                    },
+                    "required": ["content", "name"],
+                },
+            ),
         ]
     
     @server.call_tool()
@@ -644,6 +664,21 @@ async def main():
                     song_list.append(f"- {name} (duration: {song.duration:.2f}s, tempo: {song.tempo} BPM)")
                 
                 return [types.TextContent(type="text", text="Available songs:\n" + "\n".join(song_list))]
+            
+            # Tracker tools
+            elif name == "load_tracker_content":
+                if not arguments or "content" not in arguments or "name" not in arguments:
+                    raise ValueError("Missing content or name argument")
+                
+                content = arguments["content"]
+                song_name = arguments["name"]
+                
+                result = create_midi_song(midi_manager.song_manager, song_name, content)
+                
+                if result["status"] == "success":
+                    return [types.TextContent(type="text", text=f"{result['message']}\nSong: {result['song_data']['name']}\nTempo: {result['song_data']['tempo']} BPM\nNotes: {result['song_data']['notes']}\n\nUse play_song name=\"{song_name}\" to play it")]
+                else:
+                    return [types.TextContent(type="text", text=f"Error: {result['message']}")]
             
             else:
                 raise ValueError(f"Unknown tool: {name}")
