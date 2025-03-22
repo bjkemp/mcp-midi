@@ -1,0 +1,23 @@
+TITLE: Simple Drum Pattern
+TEMPO: 120
+SPEED: 4
+INSTRUMENT 9: Standard Drum Kit
+
+|Drum     |
+|---------|
+|C-2 09 40| Row 00 - Kick
+|.....    | Row 01
+|F#2 09 32| Row 02 - Closed Hi-Hat
+|.....    | Row 03
+|D-2 09 40| Row 04 - Snare
+|F#2 09 32| Row 05 - Closed Hi-Hat
+|.....    | Row 06
+|F#2 09 32| Row 07 - Closed Hi-Hat
+|C-2 09 40| Row 08 - Kick
+|F#2 09 32| Row 09 - Closed Hi-Hat
+|.....    | Row 10
+|F#2 09 32| Row 11 - Closed Hi-Hat
+|D-2 09 40| Row 12 - Snare
+|F#2 09 32| Row 13 - Closed Hi-Hat
+|.....    | Row 14
+|F#2 09 32| Row 15 - Closed Hi-Hat
