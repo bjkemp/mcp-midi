@@ -1,0 +1,40 @@
+flowchart TB
+    subgraph User
+        Claude["Claude AI"]
+        DAW["Digital Audio Workstation"]
+        Hardware["MIDI Hardware"]
+    end
+    
+    subgraph MCP["MCP-MIDI Server"]
+        API["REST & WebSocket API"]
+        MIDICore["MIDI Core Functions"]
+        Songs["Song Creation & Playback"]
+        Files["MIDI File Handling"]
+        Tracker["Tracker Functionality"]
+    end
+    
+    subgraph Output
+        MIDIOut["MIDI Output"]
+    end
+    
+    Claude -- "Natural Language\nRequests" --> API
+    DAW -- "MIDI Data" --> MIDIOut
+    API -- "MIDI Commands" --> MIDICore
+    MIDICore -- "MIDI Messages" --> MIDIOut
+    MIDIOut -- "Sound" --> Hardware
+    
+    MIDICore --> Songs
+    MIDICore --> Files
+    MIDICore --> Tracker
+    
+    Songs --> MIDICore
+    Files --> MIDICore
+    Tracker --> MIDICore
+    
+    classDef primary fill:#d4f1f9,stroke:#05668d
+    classDef secondary fill:#e1f7d5,stroke:#75b79e
+    classDef tertiary fill:#ffe0ac,stroke:#f07167
+    
+    class Claude,DAW,Hardware tertiary
+    class API,MIDICore primary
+    class Songs,Files,Tracker,MIDIOut secondary

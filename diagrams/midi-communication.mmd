@@ -1,0 +1,34 @@
+sequenceDiagram
+    participant Claude as Claude AI
+    participant Server as MCP-MIDI Server
+    participant Song as Song Manager
+    participant Tracker as Tracker Parser
+    participant MIDI as MIDI Port
+    participant Device as MIDI Device
+    
+    Claude->>Server: Send MIDI command (REST/MCP)
+    alt Direct MIDI Commands
+        Server->>MIDI: note_on, note_off, program_change, etc.
+        MIDI->>Device: Send MIDI message
+        Device-->>MIDI: Acknowledge
+        MIDI-->>Server: Success
+    else Song Creation
+        Server->>Song: create_song
+        Server->>Song: add_note, add_chord
+        Song-->>Server: Confirm creation
+        Claude->>Server: play_song
+        Server->>Song: Request playback
+        Song->>MIDI: Send MIDI events in sequence
+        MIDI->>Device: Play note events in time
+    else Tracker Files
+        Claude->>Server: Load tracker file
+        Server->>Tracker: Parse tracker file
+        Tracker->>Song: Convert to song
+        Claude->>Server: play_tracker
+        Server->>Song: Request playback
+        Song->>MIDI: Send MIDI events in sequence
+        MIDI->>Device: Play note events in time
+    end
+    
+    MIDI-->>Device: All MIDI events completed
+    Server-->>Claude: Playback complete

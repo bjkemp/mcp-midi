@@ -1,0 +1,55 @@
+flowchart TB
+    API[FastAPI Application]
+    
+    subgraph MIDI["MIDI Control Endpoints"]
+        Ports["GET /midi/ports
+               List MIDI ports"]
+        Connect["POST /midi/connect/{port_id}
+                Connect to MIDI port"]
+        NoteOn["POST /midi/note_on
+               Play a note"]
+        NoteOff["POST /midi/note_off
+                Stop a note"]
+        ProgramChange["POST /midi/program_change
+                     Change instrument"]
+        ControlChange["POST /midi/control_change
+                     Modify controller value"]
+        AllNotesOff["POST /midi/all_notes_off
+                   Stop all notes"]
+    end
+    
+    subgraph Files["MIDI File Endpoints"]
+        LoadFile["POST /midi/load_file
+                Load MIDI file"]
+        LoadContent["POST /midi/load_content
+                   Load MIDI from Base64"]
+        ListFiles["GET /midi/list_files
+                 List loaded files"]
+        PlayFile["POST /midi/play_file
+                Play MIDI file"]
+        StopFile["POST /midi/stop_file
+                Stop playback"]
+        ConvertSong["POST /midi/convert_to_song
+                   Convert to Song object"]
+    end
+    
+    subgraph MCP["MCP Protocol"]
+        MCPEndpoint["POST /mcp
+                   JSON-RPC style API"]
+    end
+    
+    subgraph WebSockets["WebSocket API"]
+        WS["WebSocket /ws
+          Real-time MIDI control"]
+    end
+    
+    API --> MIDI
+    API --> Files
+    API --> MCP
+    API --> WebSockets
+    
+    classDef primary fill:#d4f1f9,stroke:#05668d
+    classDef group fill:#e1f7d5,stroke:#75b79e
+    
+    class API primary
+    class MIDI,Files,MCP,WebSockets group

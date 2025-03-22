@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 from mcp_midi.all_notes_off import register_note_on, register_note_off, all_notes_off
+from mcp_midi.midi_file import MidiFilePlayer
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +60,7 @@ def create_midi_callback():
 midi_ports = {}
 active_ports = {}
 current_instrument = 0  # Default General MIDI instrument
+midi_file_player = MidiFilePlayer()  # MIDI file player instance
 
 # Import song functionality
 from mcp_midi.song.manager import SongManager
@@ -567,6 +569,191 @@ async def list_songs():
         )
 
 
+# MIDI File handling endpoints
+class LoadMidiRequest(BaseModel):
+    """Model for loading a MIDI file"""
+    path: str
+    name: Optional[str] = None
+
+
+class LoadMidiContentRequest(BaseModel):
+    """Model for loading MIDI content from base64-encoded data"""
+    data: str  # Base64-encoded MIDI file data
+    name: str = "uploaded_midi"
+
+
+@app.post("/midi/load_file")
+async def load_midi_file(request: LoadMidiRequest):
+    """Load a MIDI file"""
+    try:
+        # Configure the MIDI file player
+        midi_file_player.set_midi_callback(lambda cmd_type, params: 
+            asyncio.create_task(_send_midi_message(cmd_type, params)))
+        
+        success = midi_file_player.load_file(request.path, request.name)
+        
+        if success:
+            # Get the file info
+            file_info = midi_file_player.get_file_info(
+                request.name if request.name else os.path.basename(request.path)
+            )
+            return {"message": "MIDI file loaded successfully", "info": file_info}
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Failed to load MIDI file from {request.path}"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/midi/load_content")
+async def load_midi_content(request: LoadMidiContentRequest):
+    """Load a MIDI file from base64-encoded data"""
+    try:
+        # Configure the MIDI file player
+        midi_file_player.set_midi_callback(lambda cmd_type, params: 
+            asyncio.create_task(_send_midi_message(cmd_type, params)))
+        
+        success = midi_file_player.load_from_base64(request.data, request.name)
+        
+        if success:
+            # Get the file info
+            file_info = midi_file_player.get_file_info(request.name)
+            return {"message": "MIDI content loaded successfully", "info": file_info}
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Failed to load MIDI content from base64 data"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.get("/midi/list_files")
+async def list_midi_files():
+    """List all loaded MIDI files"""
+    try:
+        files = midi_file_player.list_files()
+        return {"files": files}
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+class PlayMidiRequest(BaseModel):
+    """Model for playing a MIDI file"""
+    name: str
+    port_id: int = 0
+
+
+@app.post("/midi/play_file")
+async def play_midi_file(request: PlayMidiRequest):
+    """Play a MIDI file"""
+    try:
+        # Configure the MIDI file player
+        port = connect_to_port(request.port_id)
+        midi_file_player.set_midi_port(port)
+        midi_file_player.set_midi_callback(lambda cmd_type, params: 
+            asyncio.create_task(_send_midi_message(cmd_type, params)))
+        
+        success = midi_file_player.start_playback(request.name)
+        
+        if success:
+            return {"message": f"Playing MIDI file: {request.name}"}
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Failed to play MIDI file: {request.name}"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/midi/stop_file")
+async def stop_midi_file():
+    """Stop the current MIDI file playback"""
+    try:
+        success = midi_file_player.stop_playback()
+        
+        if success:
+            return {"message": "MIDI file playback stopped"}
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "No MIDI file currently playing"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+@app.post("/midi/convert_to_song")
+async def convert_midi_to_song(request: PlayMidiRequest):
+    """Convert a MIDI file to a Song object"""
+    try:
+        song = midi_file_player.convert_to_song(request.name)
+        
+        if song:
+            # Add the song to the song manager
+            from mcp_midi.song.manager import SongManager
+            song_manager = SongManager()
+            
+            # Set the callback
+            song.set_midi_callback(lambda cmd_type, params: 
+                asyncio.create_task(_send_midi_message(cmd_type, params)))
+            
+            song_manager.add_song(song)
+            
+            return {
+                "message": f"Converted MIDI file to song: {request.name}",
+                "song_info": {
+                    "name": song.name,
+                    "duration": song.duration,
+                    "event_count": len(song.events)
+                }
+            }
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Failed to convert MIDI file: {request.name}"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)},
+        )
+
+
+# Helper function to send MIDI messages
+async def _send_midi_message(cmd_type, params):
+    """Internal function to send MIDI messages from the MIDI file player"""
+    try:
+        if cmd_type == "note_on":
+            await send_note_on(MidiNoteOn(**params))
+        elif cmd_type == "note_off":
+            await send_note_off(MidiNoteOff(**params))
+        elif cmd_type == "program_change":
+            await send_program_change(MidiProgramChange(**params))
+        elif cmd_type == "control_change":
+            await send_control_change(MidiControlChange(**params))
+    except Exception as e:
+        logger.error(f"Error in _send_midi_message: {e}")
+
+
 # MCP Protocol implementation
 class MCPRequest(BaseModel):
     """MCP Request Model"""
@@ -677,6 +864,146 @@ async def mcp_endpoint(request: Request):
                 id=mcp_request.id,
                 result={"message": f"All notes off sent for channels: {channels or 'all'}"}
             )
+            
+        elif mcp_request.method == "midi.load_file":
+            path = mcp_request.params.get("path")
+            name = mcp_request.params.get("name")
+            
+            # Configure the MIDI file player
+            midi_file_player.set_midi_callback(lambda cmd_type, params: 
+                asyncio.create_task(_send_midi_message(cmd_type, params)))
+            
+            success = midi_file_player.load_file(path, name)
+            
+            if success:
+                # Get the file info
+                file_info = midi_file_player.get_file_info(
+                    name if name else os.path.basename(path)
+                )
+                return MCPResponse(
+                    id=mcp_request.id,
+                    result={"message": "MIDI file loaded successfully", "info": file_info}
+                )
+            else:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32000,
+                        "message": f"Failed to load MIDI file from {path}"
+                    }
+                )
+        
+        elif mcp_request.method == "midi.load_content":
+            data = mcp_request.params.get("data")  # Base64-encoded MIDI data
+            name = mcp_request.params.get("name", "uploaded_midi")
+            
+            # Configure the MIDI file player
+            midi_file_player.set_midi_callback(lambda cmd_type, params: 
+                asyncio.create_task(_send_midi_message(cmd_type, params)))
+            
+            success = midi_file_player.load_from_base64(data, name)
+            
+            if success:
+                # Get the file info
+                file_info = midi_file_player.get_file_info(name)
+                return MCPResponse(
+                    id=mcp_request.id,
+                    result={"message": "MIDI content loaded successfully", "info": file_info}
+                )
+            else:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32000,
+                        "message": "Failed to load MIDI content from base64 data"
+                    }
+                )
+            
+        elif mcp_request.method == "midi.list_files":
+            files = midi_file_player.list_files()
+            return MCPResponse(
+                id=mcp_request.id,
+                result={"files": files}
+            )
+            
+        elif mcp_request.method == "midi.play_file":
+            name = mcp_request.params.get("name")
+            port_id = mcp_request.params.get("port_id", 0)
+            
+            # Configure the MIDI file player
+            port = connect_to_port(port_id)
+            midi_file_player.set_midi_port(port)
+            midi_file_player.set_midi_callback(lambda cmd_type, params: 
+                asyncio.create_task(_send_midi_message(cmd_type, params)))
+            
+            success = midi_file_player.start_playback(name)
+            
+            if success:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    result={"message": f"Playing MIDI file: {name}"}
+                )
+            else:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32000,
+                        "message": f"Failed to play MIDI file: {name}"
+                    }
+                )
+            
+        elif mcp_request.method == "midi.stop_file":
+            success = midi_file_player.stop_playback()
+            
+            if success:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    result={"message": "MIDI file playback stopped"}
+                )
+            else:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32000,
+                        "message": "No MIDI file currently playing"
+                    }
+                )
+            
+        elif mcp_request.method == "midi.convert_to_song":
+            name = mcp_request.params.get("name")
+            
+            song = midi_file_player.convert_to_song(name)
+            
+            if song:
+                # Add the song to the song manager
+                from mcp_midi.song.manager import SongManager
+                song_manager = SongManager()
+                
+                # Set the callback
+                song.set_midi_callback(lambda cmd_type, params: 
+                    asyncio.create_task(_send_midi_message(cmd_type, params)))
+                
+                song_manager.add_song(song)
+                
+                return MCPResponse(
+                    id=mcp_request.id,
+                    result={
+                        "message": f"Converted MIDI file to song: {name}",
+                        "song_info": {
+                            "name": song.name,
+                            "duration": song.duration,
+                            "event_count": len(song.events)
+                        }
+                    }
+                )
+            else:
+                return MCPResponse(
+                    id=mcp_request.id,
+                    error={
+                        "code": -32000,
+                        "message": f"Failed to convert MIDI file: {name}"
+                    }
+                )
         
         # Song-related MCP methods
         elif mcp_request.method == "create_song":
@@ -973,6 +1300,19 @@ async def websocket_endpoint(websocket: WebSocket):
                             MidiProgramChange(**midi_data["params"]),
                             midi_data.get("port_id", 0)
                         )
+                    
+                    elif cmd_type == "load_file":
+                        await load_midi_file(
+                            LoadMidiRequest(**midi_data["params"])
+                        )
+                    
+                    elif cmd_type == "play_file":
+                        await play_midi_file(
+                            PlayMidiRequest(**midi_data["params"])
+                        )
+                    
+                    elif cmd_type == "stop_file":
+                        await stop_midi_file()
                     
                     await websocket.send_json({
                         "type": "response",
