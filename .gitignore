@@ -39,3 +39,7 @@ logs/
 # Project-specific
 *.mid
 *.midi
+
+# Lock files
+uv.lock
+uv.lock.old
