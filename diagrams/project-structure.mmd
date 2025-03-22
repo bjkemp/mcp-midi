@@ -1,0 +1,49 @@
+flowchart LR
+    subgraph Project["Project Root Directory"]
+        MainFiles["Main Files
+        - main.py
+        - server.py
+        - claude_client.py"]
+        
+        subgraph SRC["src/mcp_midi/"]
+            CoreFiles["Core MIDI Files
+            - all_notes_off.py
+            - midi_file.py
+            - server.py"]
+            
+            subgraph Song["song/"]
+                SongFiles["Song Management
+                - song.py
+                - manager.py"]
+            end
+            
+            TrackerInt["Tracker Integration
+            - tracker_interface.py
+            - tracker_parser.py"]
+        end
+        
+        subgraph Tracker["tracker/"]
+            TrackerFiles["Tracker Files
+            - tracker.py"]
+        end
+        
+        Docs["Documentation
+        - README.md
+        - CLAUDE.md"]
+        
+        Examples["Example Files
+        - happy_birthday.txt
+        - drum_pattern.txt
+        - simple_melody.txt"]
+    end
+    
+    MainFiles --> SRC
+    SRC --> Song
+    SRC --> TrackerInt
+    TrackerInt --> Tracker
+    
+    class MainFiles,CoreFiles,SongFiles,TrackerFiles,TrackerInt primary
+    class Docs,Examples secondary
+    
+    classDef primary fill:#d4f1f9,stroke:#05668d
+    classDef secondary fill:#ffe0ac,stroke:#f07167

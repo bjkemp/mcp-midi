@@ -1,0 +1,43 @@
+classDiagram
+    class TrackerSong {
+        +String title
+        +int initial_tempo
+        +int initial_speed
+        +List~TrackerPattern~ patterns
+        +List~int~ pattern_order
+        +Dict~int, String~ instruments
+    }
+    
+    class TrackerPattern {
+        +int rows
+        +int channels
+        +List~List~TrackerNote~~ notes
+    }
+    
+    class TrackerNote {
+        +String note
+        +int instrument
+        +int volume
+        +String effect
+        +int effect_value
+    }
+    
+    TrackerSong "1" *-- "many" TrackerPattern : contains
+    TrackerPattern "1" *-- "many" TrackerNote : contains
+    
+    class MIDIConversion {
+        +tracker_to_midi(song, midi_song_name)
+        +play_tracker_file(file_path)
+        +note_to_midi(note, octave)
+    }
+    
+    class TrackerParser {
+        +parse_tracker_file(file_content)
+        +parse_note(note_str)
+        +create_demo_tracker(output_path)
+    }
+    
+    TrackerParser ..> TrackerSong : creates
+    TrackerParser ..> TrackerPattern : creates
+    TrackerParser ..> TrackerNote : creates
+    MIDIConversion ..> TrackerSong : converts

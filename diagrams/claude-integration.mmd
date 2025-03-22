@@ -1,0 +1,47 @@
+flowchart LR
+    Claude[Claude AI]
+    
+    subgraph Integration["Integration Options"]
+        MCP["MCP Protocol
+             (Claude Desktop)"]
+        WebAPI["Web API
+               (REST Endpoints)"]
+        WebSocket["WebSocket
+                 (Real-time)"]
+        Direct["Direct Interaction
+               (claude_client.py)"]
+    end
+    
+    subgraph Workflows["Common Workflows"]
+        Notes["Playing Individual Notes"]
+        Songs["Creating & Playing Songs"]
+        Files["Loading & Playing MIDI Files"]
+        Trackers["Creating Music with Tracker Format"]
+    end
+    
+    Claude --> Integration
+    Integration --> Workflows
+    
+    MCP --> Notes
+    MCP --> Songs
+    MCP --> Files
+    MCP --> Trackers
+    
+    WebAPI --> Notes
+    WebAPI --> Songs
+    WebAPI --> Files
+    WebAPI --> Trackers
+    
+    WebSocket --> Notes
+    WebSocket --> Songs
+    
+    Direct --> Notes
+    Direct --> Songs
+    
+    classDef primary fill:#d4f1f9,stroke:#05668d
+    classDef secondary fill:#e1f7d5,stroke:#75b79e
+    classDef tertiary fill:#ffe0ac,stroke:#f07167
+    
+    class Claude primary
+    class Integration secondary
+    class Workflows tertiary

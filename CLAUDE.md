@@ -4,8 +4,7 @@
 
 **PATH MARKERS**
 - PRIMARY_REPO: `/Users/benjamin/Projects/mcp-midi`
-- DOCUMENTATION_REPO: `/Users/benjamin/Projects/mcp-cli`
-- DIAGRAMS_PATH: `/Users/benjamin/Projects/mcp-cli/diagrams`
+- DIAGRAMS_PATH: `/Users/benjamin/Projects/mcp-midi/diagrams`
 
 **INDEX OF KNOWLEDGE**
 1. Core MIDI functionality: `PRIMARY_REPO/src/mcp_midi`
