@@ -247,6 +247,14 @@ def create_midi_song(song_manager, name: str, tracker_content: str) -> Dict[str,
                     time=cmd["time"],
                     channel=cmd["channel"]
                 )
+            elif cmd["command"] == "note":
+                song.add_note(
+                    pitch=cmd["pitch"],
+                    time=cmd["time"],
+                    duration=cmd["duration"],
+                    velocity=cmd["velocity"],
+                    channel=cmd["channel"]
+                )
         
         return {
             "status": "success",
@@ -259,14 +267,6 @@ def create_midi_song(song_manager, name: str, tracker_content: str) -> Dict[str,
                 "notes": len([cmd for cmd in midi_commands if cmd["command"] == "note"])
             }
         }
-            elif cmd["command"] == "note":
-                song.add_note(
-                    pitch=cmd["pitch"],
-                    time=cmd["time"],
-                    duration=cmd["duration"],
-                    velocity=cmd["velocity"],
-                    channel=cmd["channel"]
-                )
         
         return {
             "status": "success",
